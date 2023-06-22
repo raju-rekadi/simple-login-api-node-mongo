@@ -10,14 +10,23 @@ module.exports = {
     getById,
     create,
     update,
-    delete: _delete
+    delete: _delete,
+    logout,
+    audit
 };
 
-async function authenticate({ username, password }) {
-    const user = await User.findOne({ username });
-    if (user && bcrypt.compareSync(password, user.hash)) {
+    async function authenticate(ip, userParam) {
+    const user = await User.findOne({ username: userParam.username });
+    if (user && bcrypt.compareSync(userParam.password, user.hash)) {
         const { hash, ...userWithoutHash } = user.toObject();
         const token = jwt.sign({ sub: user.id }, config.secret);
+
+        // Update the login time and client IP
+        user.lastLoginTime = new Date();
+        user.lastClientIP = ip;
+        // Save the changes to the database
+        await user.save();
+
         return {
             ...userWithoutHash,
             token
@@ -72,4 +81,18 @@ async function update(id, userParam) {
 
 async function _delete(id) {
     await User.findByIdAndRemove(id);
+}
+
+async function audit() {
+    return await User.find().select('-hash');
+}
+
+async function logout(userParam) {
+    const user = await User.findOne({ username: userParam.username });
+    if (user) {
+        // Update the login time and client IP
+          user.lastLogoutTime = new Date();
+        // Save the changes to the database
+        await user.save();
+    }
 }
